@@ -9,16 +9,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 깃허브 러너(일꾼) 호출
+      - name: 1. 깃허브 러너(일꾼) 호출
         uses: actions/checkout@v4
 
-      - name: 자격 증명 설정
+      - name: 2. 자격 증명 설정
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: config, html S3에 업로드
+      - name: 3. config, html S3에 업로드
         run: |
           # aws s3 cp ./default.conf s3://${{ secrets.S3_BUCKET_NAME }}/config/default.conf
           aws s3 sync ./html/ s3://${{ secrets.S3_BUCKET_NAME }}/html/ --delete
+      - name: 4. ECR 로그인
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 5. 빌드 및 ECR에 도커이미지 push
+        # github.sha를 태그로 사용할 수 있게 환경변수에 ID 값을 저장한다.(이걸 태그로 사용함)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$latest .
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$latest
